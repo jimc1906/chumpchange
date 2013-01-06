@@ -6,7 +6,7 @@
 # See http://rubydoc.info/gems/rspec-core/RSpec/Core/Configuration
 require 'rubygems'
 require 'bundler/setup'
-require 'attr_control'
+require 'chump_change'
 require 'active_record'
 
 ActiveRecord::Base.establish_connection adapter: "sqlite3", database: ":memory:"

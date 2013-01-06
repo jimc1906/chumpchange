@@ -1,17 +1,17 @@
 # -*- encoding: utf-8 -*-
 $:.push File.expand_path("../lib", __FILE__)
-require "attr_control/version"
+require "chump_change/version"
 
 Gem::Specification.new do |s|
-  s.name        = "attr_control"
-  s.version     = AttrControl::VERSION
+  s.name        = "chump_change"
+  s.version     = ChumpChange::VERSION
   s.authors     = ["Jim Clingenpeel"]
-  s.email       = "jclingen@live.com"
+  s.email       = "jclingen@nearinfinity.com"
   s.homepage    = ""
   s.summary     = %q{Provide DSL to control ability to save changes to attributes}
   s.description = %q{DSL may be used to allow changes to model attributes based on the value of a driver attribute}
 
-  s.rubyforge_project = "attr_control"
+  s.rubyforge_project = "chump_change"
 
   s.files         = `git ls-files`.split("\n")
   s.test_files    = `git ls-files -- {test,spec,features}/*`.split("\n")
