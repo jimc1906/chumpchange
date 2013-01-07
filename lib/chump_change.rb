@@ -44,13 +44,19 @@ module ChumpChange
         true
       end
 
+      # Return the fields allowed for the parameter value, if configured.  If the parameter value is not a configured value,
+      # then return all attributes
       def fields_allowed_for_value(currvalue)
-        @always_allow_modification + @state_hash[currvalue.to_sym]
+        allowed = @always_allow_modification + (@state_hash[currvalue.to_sym] || all_available_attributes)
+        allowed.uniq
+      end
+
+      def all_available_attributes
+        @model_class.attribute_names.collect{|v| v.to_sym }
       end
 
       def confirm_specified_attributes
-        class_attributes = @model_class.attribute_names.collect{|v| v.to_sym }
-
+        class_attributes = all_available_attributes
         raise ChumpChange::ConfigurationError.new "Invalid control_by attribute specified: #{control_by}" unless class_attributes.include? control_by.to_sym
 
         invalid = @always_prevent_modification - class_attributes
