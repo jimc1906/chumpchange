@@ -16,6 +16,13 @@ module ChumpChange
           t.string :other_control
           t.timestamps
         end
+        ::ActiveRecord::Migration.create_table :parts do |t|
+          t.string :name
+          t.string :manufacturer_state
+          t.integer :quantity
+          t.integer :widget_id
+          t.timestamps
+        end
       end
 
       after(:all) do
@@ -37,6 +44,27 @@ module ChumpChange
 
           # When class loads, field consistency check executes
           WidgetSimpleBasedOnState
+        end
+         
+        it 'should load with configuration that allows for association' do
+          class WidgetPartAssociationConfig < ActiveRecord::Base
+            self.table_name = 'parts'
+
+            belongs_to :widget
+          end
+
+          class Widget < ActiveRecord::Base
+            include ::ChumpChange::AttributeGuardian
+            self.table_name = 'widgets'
+
+            has_one :part
+
+            attribute_control({:control_by => :state}) do
+              always_prevent :name
+              allow_modification 'one', :one, :part
+              allow_modification 'two', :two, :three
+            end
+          end
         end
 
         it 'should raise configuration error if incomplete' do
@@ -112,6 +140,17 @@ module ChumpChange
             end
           end
 
+          w = WidgetChangesAlwaysPrevent.new
+          w.state = 'initiated'
+          w.name = 'initial value'
+          w.save
+
+          w.name = 'altered value'
+          expect {
+            w.save
+          }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields.*name/) 
+          
+          # still no problems with a nil or unknown state (control value)
           w = WidgetChangesAlwaysPrevent.new
           w.name = 'initial value'
           w.save

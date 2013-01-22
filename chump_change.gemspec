@@ -7,7 +7,7 @@ Gem::Specification.new do |s|
   s.version     = ChumpChange::VERSION
   s.authors     = ["Jim Clingenpeel"]
   s.email       = "jclingen@nearinfinity.com"
-  s.homepage    = ""
+  s.homepage    = "https://github.com/jimc1906/chumpchange"
   s.summary     = %q{Provide DSL to control ability to save changes to attributes}
   s.description = %q{DSL may be used to allow changes to model attributes based on the value of a driver attribute}
 
@@ -21,4 +21,5 @@ Gem::Specification.new do |s|
   s.add_development_dependency("rspec",    "~> 2.12.0")
   s.add_development_dependency("activerecord",    "~> 3.2.9")
   s.add_development_dependency("sqlite3")
+  s.add_development_dependency("ruby-debug19")
 end

@@ -18,6 +18,8 @@ module ChumpChange
         @always_prevent_modification = [ :id, :created_at, :updated_at ]
         @always_allow_modification = [ @control_column ]
 
+        @association_names = @model_class.reflect_on_all_associations.map(&:name)
+
         @state_hash = {}
       end
 
@@ -33,26 +35,35 @@ module ChumpChange
         @state_hash[control_value.to_sym] = fields.flatten
       end
 
-      def can_modify_fields_for_value?(value, changed)
+      def can_modify_fields?(changed, allowed_changes)
         changed.collect!{|v| v.to_sym}
-        prevent = @always_prevent_modification & changed
-        raise ChumpChange::Error.new "Attempt has been made to modify restricted fields: #{prevent}" unless prevent.empty?
+        prevented_changes = attributes_changed_on_model(changed, allowed_changes)
+        raise ChumpChange::Error.new "Attempt has been made to modify restricted fields: #{prevented_changes}" unless prevented_changes.empty?
 
-        prevent = changed - fields_allowed_for_value(value)
-        raise ChumpChange::Error.new "Attempt has been made to modify restricted fields: #{prevent}" unless prevent.empty?
+        prevented_changes = changed - (allowed_changes + @always_allow_modification)
+        raise ChumpChange::Error.new "Attempt has been made to modify restricted fields: #{prevented_changes}" unless prevented_changes.empty?
 
         true
+      end
+
+      def attributes_changed_on_model(changed, allowed_changes)
+        changed -= @association_names
+        prevented_changes = @always_prevent_modification & (changed - @always_allow_modification)
+        prevented_changes
+      end
+
+      def attributes_changed_on_model_association(changed, allowed_changes)
       end
 
       # Return the fields allowed for the parameter value, if configured.  If the parameter value is not a configured value,
       # then return all attributes
       def fields_allowed_for_value(currvalue)
-        allowed = @always_allow_modification + (@state_hash[currvalue.to_sym] || all_available_attributes)
+        allowed = @always_allow_modification + (@state_hash[currvalue] || all_available_attributes)
         allowed.uniq
       end
 
       def all_available_attributes
-        @model_class.attribute_names.collect{|v| v.to_sym }
+        @model_class.attribute_names.collect{|v| v.to_sym } + @association_names
       end
 
       def confirm_specified_attributes
@@ -89,13 +100,17 @@ module ChumpChange
       end
     end
 
+    # May be overridden to allow for custom implementation
     def allowable_change_fields
-      @@definition.fields_allowed_for_value(self.send(@@definition.control_by).to_sym)
+      # Gracefully handle a nil control value
+      ctlval = self.send(@@definition.control_by)
+      ctlval = (ctlval ? ctlval.to_sym : ctlval)
+      @@definition.fields_allowed_for_value(ctlval)
     end
 
     def review_field_changes
       return true if new_record?
-      @@definition.can_modify_fields_for_value?(self.send(@@definition.control_by), self.changed)
+      @@definition.can_modify_fields?(self.changed, self.allowable_change_fields)
     end
   end
 end
