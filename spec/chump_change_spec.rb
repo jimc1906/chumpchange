@@ -326,30 +326,32 @@ module ChumpChange
             class WidgetChangesPreventDisallowedHasMany < ActiveRecord::Base
               include ::ChumpChange::AttributeGuardian
 
-              self.table_name = 'widgets'
-              has_many :parts, :class_name => 'WidgetPartAssociationPrevent', :as => :widget #,
-#                :before_add => :original_before_add, :before_remove => :original_before_remove
+              after_initialize :setup_state
 
-#              def initialize
-#                @before_add_hook_called = false
-#                @before_remove_hook_called = false
-#              end
-#
-#              def original_before_add(val)
-#                @before_add_hook_called = true
-#              end
-#
-#              def original_before_remove(val)
-#                @before_remove_hook_called = true
-#              end
-#
-#              def original_before_add_hook_called?
-#                @before_add_hook_called
-#              end
-#
-#              def original_before_remove_hook_called?
-#                @before_remove_hook_called
-#              end
+              self.table_name = 'widgets'
+              has_many :parts, :class_name => 'WidgetPartAssociationPrevent', :as => :widget,
+                :before_add => :original_before_add, :before_remove => :original_before_remove
+
+              def setup_state
+                @before_add_hook_called = false
+                @before_remove_hook_called = false
+              end
+
+              def original_before_add(val)
+                @before_add_hook_called = true
+              end
+
+              def original_before_remove(val)
+                @before_remove_hook_called = true
+              end
+
+              def original_before_add_hook_called?
+                @before_add_hook_called
+              end
+
+              def original_before_remove_hook_called?
+                @before_remove_hook_called
+              end
 
               attribute_control({:control_by => :state}) do
                 always_prevent_change :name
@@ -414,7 +416,7 @@ module ChumpChange
             }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields on.*parts.*quantity/) 
           end
 
-          xit 'should execute before_add hooks as originally configured' do
+          it 'should execute before_add hooks as originally configured' do
             w = WidgetChangesPreventDisallowedHasMany.new
             w.state = 'initiated'
             w.one = w.two = w.three = 123
@@ -425,7 +427,7 @@ module ChumpChange
             w.original_before_add_hook_called?.should be_true
           end
           
-          xit 'should execute before_remove hooks as originally configured' do
+          it 'should execute before_remove hooks as originally configured' do
             w = WidgetChangesPreventDisallowedHasMany.new
             w.state = 'initiated'
             w.one = w.two = w.three = 123
@@ -466,6 +468,18 @@ module ChumpChange
 
             w.parts[0].quantity += 1
             w.save.should be_true
+          end
+
+          it 'should report appropriate fields allowed to be modified on associations' do
+            w = WidgetChangesPreventDisallowedHasMany.new
+            w.state = 'initiated'
+            w.parts.build({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            w.save.should be_true
+
+            w.allowable_change_fields_for(:parts).should == [:quantity]
+            
+            w.state = 'completed'
+            w.allowable_change_fields_for(:parts).should == []
           end
         end
       end

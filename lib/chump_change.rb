@@ -106,15 +106,19 @@ module ChumpChange
         return assoc
       end
 
-      def attributes_changed_on_model_association(changed, allowed_changes)
-      end
-
       # Return the fields allowed for the parameter value, if configured.  If the parameter value is not a configured value,
       # then return all attributes
       def fields_allowed_for_value(currvalue)
         allowed = @always_allow_modification + (@state_hash[currvalue] || @attribute_names) - @always_prevent_modification
         allowed.uniq
       end
+
+      def fields_allowed_for_association_for_value(currvalue, assoc_name)
+        config_for_control_value = @associations_config[currvalue] || {}
+
+        config_for_control_value[assoc_name.to_sym][:attributes] || []
+      end
+
 
       def confirm_specified_attributes
         raise ChumpChange::ConfigurationError.new "Invalid control_by attribute specified: #{control_by}" unless @attribute_names.include? control_by.to_sym
@@ -163,13 +167,19 @@ module ChumpChange
       end
     end
 
-    # May be overridden to allow for custom implementation
-    def allowable_change_fields
+    def current_control_value
       # Gracefully handle a nil control value
       ctlval = self.send(@@definition.control_by)
-      ctlval = (ctlval ? ctlval.to_sym : ctlval)
-      
-      @@definition.fields_allowed_for_value(ctlval)
+      (ctlval ? ctlval.to_sym : ctlval)
+    end
+    
+    # May be overridden to allow for custom implementation
+    def allowable_change_fields
+      @@definition.fields_allowed_for_value(current_control_value)
+    end
+
+    def allowable_change_fields_for(assoc_name)
+      @@definition.fields_allowed_for_association_for_value(current_control_value, assoc_name)
     end
 
     # create the guard_before_create and guard_before_delete methods
