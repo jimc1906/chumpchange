@@ -6,6 +6,7 @@ module ChumpChange
       
       before(:all) do
         ::ActiveRecord::Migration.create_table :widgets do |t|
+          t.integer :id
           t.string :name
           t.integer :one
           t.integer :two
@@ -17,10 +18,20 @@ module ChumpChange
           t.timestamps
         end
         ::ActiveRecord::Migration.create_table :parts do |t|
+          t.integer :id
           t.string :name
           t.string :manufacturer_state
           t.integer :quantity
           t.integer :widget_id
+          t.integer :widget_type
+          t.timestamps
+        end
+        ::ActiveRecord::Migration.create_table :contacts do |t|
+          t.integer :id
+          t.string :name
+          t.string :mobile_number
+          t.integer :widget_id
+          t.integer :widget_type
           t.timestamps
         end
       end
@@ -28,6 +39,7 @@ module ChumpChange
       after(:all) do
         ::ActiveRecord::Migration.drop_table :widgets
         ::ActiveRecord::Migration.drop_table :parts
+        ::ActiveRecord::Migration.drop_table :contacts
       end
 
       context 'should confirm valid configuration' do
@@ -46,18 +58,14 @@ module ChumpChange
               }
               allow_change_for 'two', {
                 :attributes => [:two, :three],
-                :associations => [ {
-                                     :part => {     # allow_* default to true
-                                        :allow_create => true,
-                                        :allow_delete => false
-                                     }
-                                   }, 
-                                   {
-                                     :things => {
-                                        :attributes => [ :city, :state ]
-                                     }
+                :associations => { :part => {     # allow_* default to true
+                                      :allow_create => true,
+                                      :allow_delete => false
+                                   },
+                                   :things => {
+                                       :attributes => [ :city, :state ]
                                    }
-                                 ]
+                                 }
               }
             end
           end
@@ -83,13 +91,12 @@ module ChumpChange
               always_prevent_change :name
               allow_change_for 'one', {
                  :attributes => [:one],
-                 :associations => [
+                 :associations => 
                     {
                       :part => {
                         :attributes => [ :name, :quantity ]
                       }
                     }
-                 ]
               }
               allow_change_for 'two', {
                 :attributes => [:two, :three]
@@ -156,7 +163,7 @@ module ChumpChange
             
               attribute_control({:control_by => :state}) do
                 always_prevent_change :name
-                allow_change_for 'one', { :associations => [ {:partx => { :attributes => [:name]} } ] }
+                allow_change_for 'one', { :associations => { :partx => { :attributes => [:name]} } }
               end
             end
           }.to raise_error(ChumpChange::ConfigurationError, /Invalid association names specified.*partx/)
@@ -183,6 +190,7 @@ module ChumpChange
           class WidgetChangesPreventDisallowed < ActiveRecord::Base
             include ::ChumpChange::AttributeGuardian
             self.table_name = 'widgets'
+            has_one :part
 
             attribute_control({:control_by => :state}) do
               always_prevent_change :name
@@ -233,22 +241,157 @@ module ChumpChange
           }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields.*four/) 
         end
 
-        it 'should prevent creating associated record' do
-        end
-        
-        it 'should prevent deleting associated record' do
+        context 'has_one relationship' do
+          before(:each) do
+            class WidgetChangesPreventDisallowedHasOne < ActiveRecord::Base
+              include ::ChumpChange::AttributeGuardian
+              self.table_name = 'widgets'
+
+              has_one :part, :class_name => 'WidgetPartAssociationPrevent', :as => :widget
+
+              attribute_control({:control_by => :state}) do
+                always_prevent_change :name
+
+                # while initiated - only allow creation/deletion of part -- but can only change quantity;  no model attributes may be changed
+                allow_change_for 'initiated', { :associations => { :part => { :attributes => [:quantity] } } }
+
+                # when completed - no longer allow creation or deletion of a part; only allow :four and :five to be modified on model
+                allow_change_for 'completed', {
+                  :attributes => [:four, :five] ,
+                  :associations => { :part => { :allow_create => false, :allow_delete => false } }
+                }
+              end
+            end
+          end
+
+          it 'should prevent appropriate modification of model attributes' do
+            w = WidgetChangesPreventDisallowedHasOne.new
+            w.state = 'initiated'
+            w.one = w.two = w.three = 123
+
+            w.part = WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            w.save.should be_true
+
+            w.one -= 1
+            expect {
+              w.save
+            }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields.*one/) 
+          end
+
+          it 'should prevent creating associated record' do
+            pending "Checking for creation of record not yet supported"
+
+            w = WidgetChangesPreventDisallowedHasOne.new
+            w.state = 'initiated'
+            w.one = w.two = w.three = 123
+            w.save.should be_true
+
+            w.part = WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            expect {
+              w.save
+            }.to raise_error(ChumpChange::Error, /Attempt has been made to create association record on :parts/) 
+          end
+
+          it 'should prevent deleting associated record' do
+            pending "Checking for deletion of record not yet supported"
+
+            w = WidgetChangesPreventDisallowedHasOne.new
+            w.state = 'initiated'
+            w.one = w.two = w.three = 123
+            w.part = WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            w.save.should be_true
+
+            expect {
+              w.part = nil
+              w.save
+            }.to raise_error(ChumpChange::Error, /Attempt has been made to delete association record on :parts/) 
+          end
+
+          it 'should prevent changes for associated record attributes' do
+            w = WidgetChangesPreventDisallowedHasOne.new
+            w.state = 'initiated'
+            w.one = w.two = w.three = 123
+            w.part = WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            w.save.should be_true
+
+            expect {
+              w.part.name = 'altered'
+              w.save
+            }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields on.*part.*name/) 
+          end
         end
 
-        it 'should prevent changes for associated record attributes' do
-        end
-        
-        it 'should prevent adding to one-to-many' do
-        end
+        context 'has_many relationship' do
+          before(:each) do
+            class WidgetChangesPreventDisallowedHasMany < ActiveRecord::Base
+              include ::ChumpChange::AttributeGuardian
 
-        it 'should prevent deleting from one-to-many' do
-        end
+              self.table_name = 'widgets'
+              has_many :parts, :class_name => 'WidgetPartAssociationPrevent', :as => :widget,
+                :before_add => :guard_before_add, :before_remove => :guard_before_remove
 
-        it 'should prevent changes for one-to-many associated record attributes' do
+              attribute_control({:control_by => :state}) do
+                always_prevent_change :name
+
+                # while initiated - only allow creation/deletion of part -- but can only change quantity;  no model attributes may be changed
+                allow_change_for 'initiated', { :associations => { :parts => { :attributes => [:quantity] } } }
+
+                # when completed - no longer allow creation or deletion of a part; only allow :four and :five to be modified on model
+                allow_change_for 'completed', {
+                  :attributes => [:four, :five] ,
+                  :associations => { :parts => { :allow_create => false, :allow_delete => false } }
+                }
+              end
+            end
+          end
+
+          it 'should prevent adding to one-to-many' do
+            w = WidgetChangesPreventDisallowedHasMany.new
+            w.state = 'completed'
+            w.one = w.two = w.three = 123
+            w.save.should be_true
+
+            expect {
+              w.parts.build({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            }.to raise_error(ChumpChange::Error, /Attempt has been made to create association record on :parts/) 
+          end
+
+          it 'should prevent deleting from one-to-many' do
+            w = WidgetChangesPreventDisallowedHasMany.new
+            w.state = 'completed'
+            w.one = w.two = w.three = 123
+            w.parts.build({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            w.parts.build({:name => 'another test', :manufacturer_state => 'VA', :quantity => 100})
+            w.save.should be_true
+
+            p = w.parts.where(:name => 'another test')
+            p.should_not be_empty
+            expect {
+              w.parts.delete(p)
+            }.to raise_error(ChumpChange::Error, /Attempt has been made to delete association record on :parts/) 
+          end
+
+          it 'should prevent changes for one-to-many associated record attributes' do
+            w = WidgetChangesPreventDisallowedHasMany.new
+            w.state = 'initiated'
+            w.one = w.two = w.three = 123
+            w.parts.build({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            w.parts.build({:name => 'quick test2', :manufacturer_state => 'NC', :quantity => 20})
+            w.save.should be_true
+
+            expect {
+              w.parts[1].name = 'altered'
+              w.save
+            }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields on.*parts.*name/) 
+
+            w.reload
+            w.state = 'completed'
+            w.parts[1].quantity = 123
+
+            expect {
+              w.save
+            }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields on.*parts.*quantity/) 
+          end
         end
       end
 
@@ -305,37 +448,55 @@ module ChumpChange
           end
         end
 
-        it 'should allow changes to values specified in the allow_change_for configuration' do
-          class WidgetAllowConfiguredChanges < ActiveRecord::Base
-            include ::ChumpChange::AttributeGuardian
-            self.table_name = 'widgets'
+        context 'specified changes' do
+          before(:each) do
+            class WidgetAllowConfiguredChanges < ActiveRecord::Base
+              include ::ChumpChange::AttributeGuardian
+              self.table_name = 'widgets'
 
-            attribute_control({:control_by => :state}) do
-              always_prevent_change :name
-              allow_change_for 'initiated', { :attributes => [:one, :two, :three] }
-              allow_change_for 'completed', { :attributes => [:four, :five] }
+              attribute_control({:control_by => :state}) do
+                always_prevent_change :name
+                allow_change_for 'initiated', { :attributes => [:one, :two, :three] }
+                allow_change_for 'completed', { :attributes => [:four, :five] }
+              end
             end
           end
 
-          w = WidgetAllowConfiguredChanges.new
-          w.state = 'not_controlled'
-          w.one = 1
-          w.two = 2
-          w.three = 3
-          w.four = 4
-          w.five = 5
-          w.save
+          it 'should allow changes to values specified in the allow_change_for configuration' do
+            w = WidgetAllowConfiguredChanges.new
+            w.state = 'initiated'
+            w.one = 1
+            w.two = 2
+            w.three = 3
+            w.four = 4
+            w.five = 5
+            w.save
 
-          w.state = 'initiated'
-          w.one = 100
-          w.two = 200
-          w.three = 300
-          w.save.should be_true
+            w.one = 100
+            w.two = 200
+            w.three = 300
+            w.save.should be_true
 
-          w.state = 'completed'
-          w.four = 400
-          w.five = 500
-          w.save.should be_true
+            w.state = 'completed'
+            w.four = 400
+            w.five = 500
+            w.save.should be_true
+          end
+
+          it 'should return appropriate fields allowed for change' do
+            w = WidgetAllowConfiguredChanges.new
+            w.state = 'initiated'
+            w.save
+
+            expected = [ :one, :two, :three, :state].sort
+            allowed = w.allowable_change_fields.sort
+            expected.should == allowed
+
+            w.state = 'completed'
+            expected = [ :four, :five, :state].sort
+            allowed = w.allowable_change_fields.sort
+            expected.should == allowed
+          end
         end
       end
     end

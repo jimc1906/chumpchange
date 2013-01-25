@@ -37,7 +37,7 @@ module ChumpChange
 
       def allow_change_for(control_value, options)
         @state_hash[control_value.to_sym] = options[:attributes] || []
-        @associations_config[control_value.to_sym] = options[:associations] || []
+        @associations_config[control_value.to_sym] = options[:associations] || {}
       end
 
       def can_modify_fields?(model, allowed_changes)
@@ -51,16 +51,57 @@ module ChumpChange
         true
       end
 
-      def can_modify_associations?(model, allowed_changes)
-        @association_names
-        changed.collect!{|v| v.to_sym}
-        prevented_changes = @always_prevent_modification & (changed - @always_allow_modification)
-        raise ChumpChange::Error.new "Attempt has been made to modify restricted fields: #{prevented_changes}" unless prevented_changes.empty?
+      def can_modify_associations?(model)
+        # find the dsl-configuration for the current model control value
+        config_for_control_value = @associations_config[model.send(control_by).to_sym] || {}
 
-        prevented_changes = changed - (allowed_changes + @always_allow_modification)
-        raise ChumpChange::Error.new "Attempt has been made to modify restricted fields: #{prevented_changes}" unless prevented_changes.empty?
+        # iterate over each of the defined association names and check for disallowed changes
+        config_for_control_value.each do |key, config|
+          assoc_instance = model.send(key)
+
+          if assoc_instance.is_a? Enumerable
+            assoc_instance.each do |obj|
+              check_for_disallowed_changes(obj, config, key)
+            end
+          else
+            check_for_disallowed_changes(assoc_instance, config, key)
+          end
+        end
 
         true
+      end
+
+      def check_for_disallowed_changes(obj, config, assoc_name)
+        prevented_changes = obj.changed - (config[:attributes] || [])
+        raise ChumpChange::Error.new "Attempt has been made to modify restricted fields on #{assoc_name}: #{prevented_changes}" unless prevented_changes.empty?
+      end
+
+      def can_alter_association?(action_sym, model, assoc_instance)
+        raise "Unknown action #{action_sym} while evaluating association behavior" unless [:create, :delete].include? action_sym
+
+        assoc_def = find_matching_association_definition(assoc_instance)
+        config_for_control_value = @associations_config[model.send(control_by).to_sym] || {}
+        config_for_control_value = config_for_control_value[assoc_def.name] || {}
+
+        can_perform_action = config_for_control_value["allow_#{action_sym}".to_sym]
+        can_perform_action = true if can_perform_action.nil?
+        raise ChumpChange::Error.new "Attempt has been made to #{action_sym} association record on :#{assoc_def.name}" unless can_perform_action
+
+        true
+      end
+
+      def find_matching_association_definition(assoc_instance)
+        assoc_name = assoc_instance.class.name.underscore # flip from LineItem to line_item
+
+        # get singular or plural version
+        assoc = @model_class.reflect_on_association(assoc_name) || @model_class.reflect_on_association(assoc_name.pluralize)
+        return assoc if assoc.present?
+
+        # not found as :line_item or :line_items...look to the :class_name option that may have been used in the association definition
+        assoc = @model_class.reflect_on_all_associations.detect{|a| a.class_name == assoc_instance.class.name.split('::').last}
+
+        raise "Association not found on #{@model_class.name} for #{assoc_instance.class.name}" if assoc.nil?
+        return assoc
       end
 
       def attributes_changed_on_model_association(changed, allowed_changes)
@@ -87,11 +128,9 @@ module ChumpChange
           raise ChumpChange::ConfigurationError.new "Invalid attributes specified in the 'allow_change_for' configuration for value '#{k}': #{invalid}" unless invalid.empty?
         end
 
-        all_defined_associations = []
-        @associations_config.keys.each do |k|
-          all_defined_associations << @associations_config[k].map(&:keys)
-        end
+        all_defined_associations = @associations_config.values.inject([]) {|result,v| result << v.keys}
         all_defined_associations.flatten!.uniq!
+
         invalid = all_defined_associations - @association_names 
         raise ChumpChange::ConfigurationError.new "Invalid association names specified: #{invalid}" unless invalid.empty?
 
@@ -123,11 +162,21 @@ module ChumpChange
       @@definition.fields_allowed_for_value(ctlval)
     end
 
+    def guard_before_add(assoc_added)
+      return if new_record?
+      @@definition.can_alter_association?(:create, self, assoc_added)
+    end
+
+    def guard_before_remove(assoc_removed)
+      return if new_record?
+      @@definition.can_alter_association?(:delete, self, assoc_removed)
+    end
+
     def review_field_changes
-      return true if new_record?
+      return if new_record?
 
       @@definition.can_modify_fields?(self, self.allowable_change_fields)
-      @@definition.can_modify_associations?(self, self.allowable_change_fields)
+      @@definition.can_modify_associations?(self)
     end
   end
 end
