@@ -327,8 +327,29 @@ module ChumpChange
               include ::ChumpChange::AttributeGuardian
 
               self.table_name = 'widgets'
-              has_many :parts, :class_name => 'WidgetPartAssociationPrevent', :as => :widget,
-                :before_add => :guard_before_add, :before_remove => :guard_before_remove
+              has_many :parts, :class_name => 'WidgetPartAssociationPrevent', :as => :widget #,
+#                :before_add => :original_before_add, :before_remove => :original_before_remove
+
+#              def initialize
+#                @before_add_hook_called = false
+#                @before_remove_hook_called = false
+#              end
+#
+#              def original_before_add(val)
+#                @before_add_hook_called = true
+#              end
+#
+#              def original_before_remove(val)
+#                @before_remove_hook_called = true
+#              end
+#
+#              def original_before_add_hook_called?
+#                @before_add_hook_called
+#              end
+#
+#              def original_before_remove_hook_called?
+#                @before_remove_hook_called
+#              end
 
               attribute_control({:control_by => :state}) do
                 always_prevent_change :name
@@ -392,10 +413,64 @@ module ChumpChange
               w.save
             }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields on.*parts.*quantity/) 
           end
+
+          xit 'should execute before_add hooks as originally configured' do
+            w = WidgetChangesPreventDisallowedHasMany.new
+            w.state = 'initiated'
+            w.one = w.two = w.three = 123
+            w.save.should be_true
+
+            w.parts.build({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+
+            w.original_before_add_hook_called?.should be_true
+          end
+          
+          xit 'should execute before_remove hooks as originally configured' do
+            w = WidgetChangesPreventDisallowedHasMany.new
+            w.state = 'initiated'
+            w.one = w.two = w.three = 123
+            w.parts.build({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            w.save.should be_true
+
+            w.parts.clear
+            w.original_before_remove_hook_called?.should be_true
+          end
+
+          it 'should allow add to association as configured' do
+            w = WidgetChangesPreventDisallowedHasMany.new
+            w.state = 'initiated'
+            w.one = w.two = w.three = 123
+            w.save.should be_true
+
+            w.parts.build({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            w.save.should be_true   # no error
+          end
+          
+          it 'should allow delete from association as configured' do
+            w = WidgetChangesPreventDisallowedHasMany.new
+            w.state = 'initiated'
+            w.one = w.two = w.three = 123
+            w.parts.build({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            w.save.should be_true
+
+            w.parts.clear
+            w.save.should be_true
+          end
+
+          it 'should allow mods to association attributes as configured' do
+            w = WidgetChangesPreventDisallowedHasMany.new
+            w.state = 'initiated'
+            w.one = w.two = w.three = 123
+            w.parts.build({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            w.save.should be_true
+
+            w.parts[0].quantity += 1
+            w.save.should be_true
+          end
         end
       end
 
-      context 'should allow changes that have not been prevented' do
+      context 'should allow model changes that have not been prevented' do
         def available_attributes_for(klass)
           klass.attribute_names.collect!{|attrib| attrib.to_sym} - [:created_at, :updated_at]
         end

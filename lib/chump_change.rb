@@ -72,7 +72,9 @@ module ChumpChange
       end
 
       def check_for_disallowed_changes(obj, config, assoc_name)
-        prevented_changes = obj.changed - (config[:attributes] || [])
+        return if obj.new_record?  # additions of new records are handled through the before_add hook
+
+        prevented_changes = obj.changed.collect!{|v| v.to_sym} - (config[:attributes] || [])
         raise ChumpChange::Error.new "Attempt has been made to modify restricted fields on #{assoc_name}: #{prevented_changes}" unless prevented_changes.empty?
       end
 
@@ -145,6 +147,14 @@ module ChumpChange
       end
 
       base.instance_eval do
+        # Override activerecord/lib/active_record/associations.rb implementation of has_many to add the 
+        # call to our guard methods for the before_add and before_remove options
+        def has_many(name, options={}, &extension)
+          options[:before_add] = ([options[:before_add]].flatten + [:guard_before_create]).compact
+          options[:before_remove] = ([options[:before_remove]].flatten + [:guard_before_delete]).compact
+          super
+        end
+
         def attribute_control(options, &block)
           @@definition = Definition.new(self, options)
           @@definition.instance_eval &block
@@ -162,14 +172,14 @@ module ChumpChange
       @@definition.fields_allowed_for_value(ctlval)
     end
 
-    def guard_before_add(assoc_added)
-      return if new_record?
-      @@definition.can_alter_association?(:create, self, assoc_added)
-    end
-
-    def guard_before_remove(assoc_removed)
-      return if new_record?
-      @@definition.can_alter_association?(:delete, self, assoc_removed)
+    # create the guard_before_create and guard_before_delete methods
+    class_eval do
+      [:create,:delete].each do |i| 
+        define_method("guard_before_#{i}") do |assoc|
+          return if new_record?
+          @@definition.can_alter_association?(i, self, assoc)
+        end
+      end
     end
 
     def review_field_changes
