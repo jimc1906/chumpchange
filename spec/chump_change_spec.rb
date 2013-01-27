@@ -70,8 +70,12 @@ module ChumpChange
             end
           end
 
-          # When class loads, field consistency check executes
-          WidgetSimpleBasedOnState
+          w = WidgetSimpleBasedOnState.new
+          w.state = 'one'
+          w.one = 123
+          w.save
+          w.one = 456
+          w.save  # configuration confirmed in before_save trigger
         end
          
         it 'should load with configuration that allows for association' do
@@ -85,7 +89,7 @@ module ChumpChange
             include ::ChumpChange::AttributeGuardian
             self.table_name = 'widgets'
 
-            has_one :part
+            has_one :part, :class_name => 'WidgetPartAssociationConfig'
 
             attribute_control({:control_by => :state}) do
               always_prevent_change :name
@@ -103,6 +107,14 @@ module ChumpChange
               }
             end
           end
+
+          w = Widget.new
+          w.state = 'one'
+          w.one = 123
+          w.build_part({:name => 'part name'})
+          w.save
+          w.one = 456
+          w.save
         end
 
         it 'should raise configuration error if incomplete' do
@@ -117,6 +129,13 @@ module ChumpChange
                 allow_change_for 'two', { :attributes => [:two, :three] }
               end
             end
+
+            w = WidgetIncompleteConfig.new
+            w.state = 'one'
+            w.one = 123
+            w.save
+            w.one = 456
+            w.save
           }.to raise_error(ChumpChange::ConfigurationError, /Missing control column/)
         end
 
@@ -132,6 +151,13 @@ module ChumpChange
                 allow_change_for 'two', { :attributes => [:two, :three] }
               end
             end
+
+            w = WidgetConsistencyAlwaysPrevent.new
+            w.state = 'one'
+            w.one = 123
+            w.save
+            w.one = 456
+            w.save
           }.to raise_error(ChumpChange::ConfigurationError, /Invalid attributes.*always_prevent_change.*namex/)
         end
 
@@ -146,6 +172,13 @@ module ChumpChange
                 allow_change_for 'one', { :attributes => [:onex] }
               end
             end
+          
+            w = WidgetConsistencyAllowMod.new
+            w.state = 'one'
+            w.one = 123
+            w.save
+            w.one = 456
+            w.save
           }.to raise_error(ChumpChange::ConfigurationError, /Invalid attributes.*allow_change_for.*onex/)
         end
         
@@ -166,6 +199,13 @@ module ChumpChange
                 allow_change_for 'one', { :associations => { :partx => { :attributes => [:name]} } }
               end
             end
+
+            w = WidgetConsistencyAssocConfig.new
+            w.state = 'one'
+            w.one = 123
+            w.save
+            w.one = 456
+            w.save
           }.to raise_error(ChumpChange::ConfigurationError, /Invalid association names specified.*partx/)
         end
         
@@ -180,6 +220,13 @@ module ChumpChange
                 allow_change_for 'one', { :attributes => [:one] }
               end
             end
+          
+            w = WidgetConsistencyControlBy.new
+            w.state = 'one'
+            w.one = 123
+            w.save
+            w.one = 456
+            w.save
           }.to raise_error(ChumpChange::ConfigurationError, /Invalid control_by attribute.*statex/)
         end
       end
@@ -476,11 +523,24 @@ module ChumpChange
             w.parts.build({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
             w.save.should be_true
 
-            w.allowable_change_fields_for(:parts).should == [:quantity]
+            w.allowable_change_fields_for_parts.should == [:quantity]
             
             w.state = 'completed'
-            w.allowable_change_fields_for(:parts).should == []
+            w.allowable_change_fields_for_parts.should == []
           end
+
+          it 'should report appropriate available actions available for associations' do
+            w = WidgetChangesPreventDisallowedHasMany.new
+            w.state = 'initiated'
+            w.parts.build({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            w.save.should be_true
+
+            w.allowable_operations_for_parts.should == [:create, :delete]
+            
+            w.state = 'completed'
+            w.allowable_operations_for_parts.should == []
+          end
+
         end
       end
 

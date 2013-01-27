@@ -51,7 +51,7 @@ module ChumpChange
         true
       end
 
-      def can_modify_associations?(model)
+      def can_modify_association_attributes?(model)
         # find the dsl-configuration for the current model control value
         config_for_control_value = @associations_config[model.send(control_by).to_sym] || {}
 
@@ -78,7 +78,7 @@ module ChumpChange
         raise ChumpChange::Error.new "Attempt has been made to modify restricted fields on #{assoc_name}: #{prevented_changes}" unless prevented_changes.empty?
       end
 
-      def can_alter_association?(action_sym, model, assoc_instance)
+      def can_alter_association_collection?(action_sym, model, assoc_instance)
         raise "Unknown action #{action_sym} while evaluating association behavior" unless [:create, :delete].include? action_sym
 
         assoc_def = find_matching_association_definition(assoc_instance)
@@ -93,7 +93,7 @@ module ChumpChange
       end
 
       def find_matching_association_definition(assoc_instance)
-        assoc_name = assoc_instance.class.name.underscore # flip from LineItem to line_item
+        assoc_name = assoc_instance.class.name.underscore # e.g., flip from LineItem to line_item
 
         # get singular or plural version
         assoc = @model_class.reflect_on_association(assoc_name) || @model_class.reflect_on_association(assoc_name.pluralize)
@@ -115,12 +115,25 @@ module ChumpChange
 
       def fields_allowed_for_association_for_value(currvalue, assoc_name)
         config_for_control_value = @associations_config[currvalue] || {}
-
         config_for_control_value[assoc_name.to_sym][:attributes] || []
       end
 
+      def operations_allowed_for_association_for_value(currvalue, assoc_name)
+        config_for_control_value = @associations_config[currvalue] || {}
+        allowed = []
+
+        [:create, :delete].each do |action|
+          can_perform_action = config_for_control_value[assoc_name.to_sym]["allow_#{action}".to_sym]
+          can_perform_action = true if can_perform_action.nil?
+          allowed << action if can_perform_action
+        end
+
+        allowed
+      end
 
       def confirm_specified_attributes
+        return if @configuration_confirmed
+
         raise ChumpChange::ConfigurationError.new "Invalid control_by attribute specified: #{control_by}" unless @attribute_names.include? control_by.to_sym
 
         invalid = @always_prevent_modification - @attribute_names
@@ -134,6 +147,8 @@ module ChumpChange
           raise ChumpChange::ConfigurationError.new "Invalid attributes specified in the 'allow_change_for' configuration for value '#{k}': #{invalid}" unless invalid.empty?
         end
 
+        #TODO: check attributes specified on association configs
+
         all_defined_associations = @associations_config.values.inject([]) {|result,v| result << v.keys}
         all_defined_associations.flatten!.uniq!
 
@@ -141,13 +156,15 @@ module ChumpChange
         raise ChumpChange::ConfigurationError.new "Invalid association names specified: #{invalid}" unless invalid.empty?
 
         overlap = @always_allow_modification & @always_prevent_modification
-        raise ChumpChange::ConfigurationError.new "Conflict in 'always_alow' and 'always_prevent_change': #{overlap}" unless overlap.empty?
+        raise ChumpChange::ConfigurationError.new "Conflict in 'always_allow' and 'always_prevent_change': #{overlap}" unless overlap.empty?
+
+        @configuration_confirmed = true
       end
     end
 
     def self.included(base)
       base.class_eval do
-        before_save :review_field_changes
+        before_save :review_model_value_changes
       end
 
       base.instance_eval do
@@ -162,7 +179,16 @@ module ChumpChange
         def attribute_control(options, &block)
           @@definition = Definition.new(self, options)
           @@definition.instance_eval &block
-          @@definition.confirm_specified_attributes
+          
+          reflect_on_all_associations.map(&:name).each do |an|
+            define_method("allowable_change_fields_for_#{an}") do
+              @@definition.fields_allowed_for_association_for_value(current_control_value, an.to_sym)
+            end
+
+            define_method("allowable_operations_for_#{an}") do
+              @@definition.operations_allowed_for_association_for_value(current_control_value, an.to_sym)
+            end
+          end
         end
       end
     end
@@ -178,25 +204,26 @@ module ChumpChange
       @@definition.fields_allowed_for_value(current_control_value)
     end
 
-    def allowable_change_fields_for(assoc_name)
-      @@definition.fields_allowed_for_association_for_value(current_control_value, assoc_name)
-    end
-
-    # create the guard_before_create and guard_before_delete methods
     class_eval do
+      # create the guard_before_create and guard_before_delete methods
       [:create,:delete].each do |i| 
         define_method("guard_before_#{i}") do |assoc|
           return if new_record?
-          @@definition.can_alter_association?(i, self, assoc)
+          
+          @@definition.confirm_specified_attributes
+
+          @@definition.can_alter_association_collection?(i, self, assoc)
         end
       end
     end
 
-    def review_field_changes
+    def review_model_value_changes
       return if new_record?
 
+      @@definition.confirm_specified_attributes
+
       @@definition.can_modify_fields?(self, self.allowable_change_fields)
-      @@definition.can_modify_associations?(self)
+      @@definition.can_modify_association_attributes?(self)
     end
   end
 end
