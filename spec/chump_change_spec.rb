@@ -400,7 +400,7 @@ module ChumpChange
                 @before_remove_hook_called
               end
 
-              attribute_control({:control_by => :state}) do
+              attribute_control(:control_by => :state) do
                 always_prevent_change :name
 
                 # while initiated - only allow creation/deletion of part -- but can only change quantity;  no model attributes may be changed
