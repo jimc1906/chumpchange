@@ -34,14 +34,14 @@ Use the provided DSL to configure attribute control.  Leverage the class method 
 The expected parameter value is a hash.  Currently the only hash key expected is __:control_by__ to specify the attribute
 that will control the attributes that are allowed to be modified.
 
-      attribute_control({:control_by => 'state'}) do
+      attribute_control(:control_by => :state) do
       end
 
 ## always_prevent ##
 Use the __always_prevent__ DSL method to specify one or more attribute symbols that should not be modifiable regardless 
 of the control_by column value.  For our example, we specify that the SamplePerson's birth_date may not be changed.
 
-      attribute_control({:control_by => 'state'}) do
+      attribute_control(:control_by => :state) do
         always_prevent_change :birth_date        
       end
       
@@ -49,7 +49,7 @@ of the control_by column value.  For our example, we specify that the SamplePers
 Use the __allow_modification__ DSL method to specify a control_by column value and the columns that may be modified when the
 control column is equal to that value.
 
-      attribute_control({:control_by => 'state'}) do
+      attribute_control(:control_by => :state) do
         always_prevent_change :birth_date        
         allow_change_for 'initiated', :attributes => [:first_name, :last_name] 
         allow_change_for 'in_process', :attributes => [:birth_city] 
@@ -60,7 +60,7 @@ ChumpChange currently allows for control of associated models one layer deep.  I
 be modified (just like the control of the attributes on the base model).  But it can also exercise control over when associated
 objects may be created or deleted from the collection.
 
-      attribute_control({:control_by => 'state'}) do
+      attribute_control(:control_by => :state) do
         always_prevent_change :birth_date        
         allow_change_for 'initiated', { 
           :attributes => [:first_name, :last_name],
