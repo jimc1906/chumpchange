@@ -156,6 +156,7 @@ module ChumpChange
             w.state = 'one'
             w.one = 123
             w.save
+            w = WidgetConsistencyAlwaysPrevent.find w.id
             w.one = 456
             w.save
           }.to raise_error(ChumpChange::ConfigurationError, /Invalid attributes.*always_prevent_change.*namex/)
@@ -177,6 +178,7 @@ module ChumpChange
             w.state = 'one'
             w.one = 123
             w.save
+            w = WidgetConsistencyAllowMod.find w.id
             w.one = 456
             w.save
           }.to raise_error(ChumpChange::ConfigurationError, /Invalid attributes.*allow_change_for.*onex/)
@@ -204,6 +206,7 @@ module ChumpChange
             w.state = 'one'
             w.one = 123
             w.save
+            w = WidgetConsistencyAssocConfig.find w.id
             w.one = 456
             w.save
           }.to raise_error(ChumpChange::ConfigurationError, /Invalid association names specified.*partx/)
@@ -225,6 +228,7 @@ module ChumpChange
             w.state = 'one'
             w.one = 123
             w.save
+            w = WidgetConsistencyControlBy.find w.id
             w.one = 456
             w.save
           }.to raise_error(ChumpChange::ConfigurationError, /Invalid control_by attribute.*statex/)
@@ -258,6 +262,7 @@ module ChumpChange
           w.state = 'initiated'
           w.name = 'initial value'
           w.save
+          w = WidgetChangesPreventDisallowed.find w.id
 
           w.name = 'altered value'
           expect {
@@ -268,6 +273,7 @@ module ChumpChange
           w = WidgetChangesPreventDisallowed.new
           w.name = 'initial value'
           w.save
+          w = WidgetChangesPreventDisallowed.find w.id
 
           w.name = 'altered value'
           expect {
@@ -281,6 +287,7 @@ module ChumpChange
           w.one = 1
           w.four = 4
           w.save
+          w = WidgetChangesPreventDisallowed.find w.id
 
           w.four = 400 
           expect {
@@ -318,6 +325,7 @@ module ChumpChange
 
             w.part = WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
             w.save.should be_true
+            w = WidgetChangesPreventDisallowedHasOne.find w.id
 
             w.one -= 1
             expect {
@@ -347,6 +355,7 @@ module ChumpChange
             w.one = w.two = w.three = 123
             w.part = WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
             w.save.should be_true
+            w = WidgetChangesPreventDisallowedHasOne.find w.id
 
             expect {
               w.part = nil
@@ -360,6 +369,7 @@ module ChumpChange
             w.one = w.two = w.three = 123
             w.part = WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
             w.save.should be_true
+            w = WidgetChangesPreventDisallowedHasOne.find w.id
 
             expect {
               w.part.name = 'altered'
@@ -406,6 +416,9 @@ module ChumpChange
                 # while initiated - only allow creation/deletion of part -- but can only change quantity;  no model attributes may be changed
                 allow_change_for 'initiated', { :associations => { :parts => { :attributes => [:quantity] } } }
 
+                prevent_change_for 'unladen_swallow'
+                prevent_change_for 'african', 'european'
+
                 # when completed - no longer allow creation or deletion of a part; only allow :four and :five to be modified on model
                 allow_change_for 'completed', {
                   :attributes => [:four, :five] ,
@@ -433,6 +446,7 @@ module ChumpChange
             w.parts.build({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
             w.parts.build({:name => 'another test', :manufacturer_state => 'VA', :quantity => 100})
             w.save.should be_true
+            w = WidgetChangesPreventDisallowedHasMany.find w.id
 
             p = w.parts.where(:name => 'another test')
             p.should_not be_empty
@@ -448,13 +462,14 @@ module ChumpChange
             w.parts.build({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
             w.parts.build({:name => 'quick test2', :manufacturer_state => 'NC', :quantity => 20})
             w.save.should be_true
+            w = WidgetChangesPreventDisallowedHasMany.find w.id
 
             expect {
               w.parts[1].name = 'altered'
               w.save
             }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields on.*parts.*name/) 
 
-            w.reload
+            w = WidgetChangesPreventDisallowedHasMany.find w.id
             w.state = 'completed'
             w.parts[1].quantity = 123
 
@@ -524,6 +539,13 @@ module ChumpChange
             w.save.should be_true
 
             w.allowable_change_fields_for_parts.should == [:quantity]
+
+            # prevented changes
+            ['unladen_swallow', 'african', 'european'].each do |st|
+              w.state = st
+              w.allowable_change_fields_for_parts.should == []
+            end
+
             
             w.state = 'completed'
             w.allowable_change_fields_for_parts.should == []
@@ -536,6 +558,12 @@ module ChumpChange
             w.save.should be_true
 
             w.allowable_operations_for_parts.should == [:create, :delete]
+            
+            # prevented changes
+            ['unladen_swallow', 'african', 'european'].each do |st|
+              w.state = st
+              w.allowable_operations_for_parts.should == []
+            end
             
             w.state = 'completed'
             w.allowable_operations_for_parts.should == []

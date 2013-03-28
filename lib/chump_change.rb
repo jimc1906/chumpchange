@@ -39,6 +39,16 @@ module ChumpChange
           @always_allow_modification.concat fields.flatten
       end
 
+      def prevent_change_for(*control_values)
+        control_values.each do |cv|
+          @state_hash[cv.to_sym] = []
+
+          @model_class.reflect_on_all_associations(:has_many).each do |assoc|
+            @associations_config[cv.to_sym] = { assoc.name => { :attributes => [], :allow_create => false, :allow_delete => false } }
+          end
+        end
+      end
+
       def allow_change_for(control_value, options)
         # Allow for either a String or Array...
         control_values = [control_value].flatten
