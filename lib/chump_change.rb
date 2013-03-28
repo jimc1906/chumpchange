@@ -16,8 +16,8 @@ module ChumpChange
 
         @control_column = options[:control_by]
         
-        # Rails also silently prevents modification to the :id attribute
-        @always_prevent_modification = [ :created_at, :updated_at ]
+        # Rails silently prevents modification to the :id attribute
+        @always_prevent_modification = [ :created_at ] # leave :updated_at handling up to the client
         @always_allow_modification = [ @control_column ]
 
         @attribute_names = @model_class.attribute_names.collect{|v| v.to_sym }
@@ -35,9 +35,18 @@ module ChumpChange
         @always_prevent_modification.concat fields.flatten
       end
 
+      def always_allow_change(*fields)
+          @always_allow_modification.concat fields.flatten
+      end
+
       def allow_change_for(control_value, options)
-        @state_hash[control_value.to_sym] = options[:attributes] || []
-        @associations_config[control_value.to_sym] = options[:associations] || {}
+        # Allow for either a String or Array...
+        control_values = [control_value].flatten
+
+        control_values.each do |cv|
+          @state_hash[cv.to_sym] = options[:attributes] || []
+          @associations_config[cv.to_sym] = options[:associations] || {}
+        end
       end
 
       def can_modify_fields?(model, allowed_changes)
@@ -218,7 +227,11 @@ module ChumpChange
     end
 
     def review_model_value_changes
-      return if new_record?
+      # This instance variable is used in cases where an after_save event handler is
+      # on the model.  We need to explicitly skip validation if new_record? returns true
+      # for the life of this instance.  (Could be improved...)
+      @chump_change_new_record = true if new_record?
+      return if new_record? || @chump_change_new_record
 
       @@definition.confirm_specified_attributes
 

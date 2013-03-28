@@ -546,7 +546,33 @@ module ChumpChange
 
       context 'should allow model changes that have not been prevented' do
         def available_attributes_for(klass)
-          klass.attribute_names.collect!{|attrib| attrib.to_sym} - [:created_at, :updated_at]
+          klass.attribute_names.collect!{|attrib| attrib.to_sym} - [:created_at]
+        end
+
+        context 'configuration with multiple states' do
+          before(:all) do
+            class WidgetMultiStateConfiguration < ActiveRecord::Base
+              include ::ChumpChange::AttributeGuardian
+              self.table_name = 'widgets'
+
+              attribute_control({:control_by => :state}) do
+                always_prevent_change :name
+                allow_change_for ['initiated','another_state'], { :attributes => [:one, :two, :three] }
+                allow_change_for 'completed', { :attributes => [:four, :five] }
+              end
+            end
+          end
+
+          it 'should return appropriate values for multiple states configured at once' do
+            w = WidgetMultiStateConfiguration.new
+            ['initiated','another_state'].each do |st|
+              w.state = st
+              w.allowable_change_fields.sort.should == [:one, :two, :three, :state].sort
+            end
+
+            w.state = 'completed'
+            w.allowable_change_fields.sort.should == [:four, :five, :state].sort
+          end
         end
 
         context 'unmonitored control attribute value' do
