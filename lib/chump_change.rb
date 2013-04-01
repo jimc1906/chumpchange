@@ -43,7 +43,7 @@ module ChumpChange
         control_values.each do |cv|
           @state_hash[cv.to_sym] = []
 
-          @model_class.reflect_on_all_associations(:has_many).each do |assoc|
+          @model_class.reflect_on_all_associations.each do |assoc|
             @associations_config[cv.to_sym] = { assoc.name => { :attributes => [], :allow_create => false, :allow_delete => false } }
           end
         end
@@ -72,12 +72,11 @@ module ChumpChange
 
       def can_modify_association_attributes?(model)
         # find the dsl-configuration for the current model control value
-        config_for_control_value = @associations_config[model.send(control_by).to_sym] || {}
+        config_for_control_value = @associations_config[model.current_control_value.to_sym] || {}
 
         # iterate over each of the defined association names and check for disallowed changes
         config_for_control_value.each do |key, config|
           assoc_instance = model.send(key)
-
           if assoc_instance.is_a? Enumerable
             assoc_instance.each do |obj|
               check_for_disallowed_changes(obj, config, key)
@@ -98,13 +97,15 @@ module ChumpChange
       end
 
       def can_alter_association_collection?(action_sym, model, assoc_instance)
+#        debugger
+#        return true unless assoc_instance.changed?
+
         raise "Unknown action #{action_sym} while evaluating association behavior" unless [:create, :delete].include? action_sym
 
         assoc_def = find_matching_association_definition(assoc_instance)
-        config_for_control_value = @associations_config[model.send(control_by).to_sym] || {}
-        config_for_control_value = config_for_control_value[assoc_def.name] || {}
 
-        can_perform_action = config_for_control_value["allow_#{action_sym}".to_sym]
+        config_for_assoc = config_for_association(model.send(control_by).to_sym, assoc_def.name)
+        can_perform_action = config_for_assoc["allow_#{action_sym}".to_sym]
         can_perform_action = true if can_perform_action.nil?
         raise ChumpChange::Error.new "Attempt has been made to #{action_sym} association record on :#{assoc_def.name}" unless can_perform_action
 
@@ -132,17 +133,24 @@ module ChumpChange
         allowed.uniq
       end
 
-      def fields_allowed_for_association_for_value(currvalue, assoc_name)
+      def config_for_association(currvalue, assoc_name)
         config_for_control_value = @associations_config[currvalue] || {}
-        config_for_control_value[assoc_name.to_sym][:attributes] || []
+        config_for_assoc = config_for_control_value[assoc_name.to_sym] || {}
+        config_for_assoc = config_for_assoc.merge!({:attributes=>[], :allow_create=>true, :allow_delete=>true}) {|key,old,new| old }
+        config_for_assoc
+      end
+
+      def fields_allowed_for_association_for_value(currvalue, assoc_name)
+        cfg = config_for_association(currvalue, assoc_name)
+        cfg[:attributes]
       end
 
       def operations_allowed_for_association_for_value(currvalue, assoc_name)
-        config_for_control_value = @associations_config[currvalue] || {}
+        config_for_assoc = config_for_association(currvalue, assoc_name)
         allowed = []
 
         [:create, :delete].each do |action|
-          can_perform_action = config_for_control_value[assoc_name.to_sym]["allow_#{action}".to_sym]
+          can_perform_action = config_for_assoc["allow_#{action}".to_sym]
           can_perform_action = true if can_perform_action.nil?
           allowed << action if can_perform_action
         end
@@ -153,16 +161,18 @@ module ChumpChange
       def confirm_specified_attributes
         return if @configuration_confirmed
 
+        effective_class_attributes = @attribute_names + @association_names
+
         raise ChumpChange::ConfigurationError.new "Invalid control_by attribute specified: #{control_by}" unless @attribute_names.include? control_by.to_sym
 
-        invalid = @always_prevent_modification - @attribute_names
+        invalid = @always_prevent_modification - effective_class_attributes
         raise ChumpChange::ConfigurationError.new "Invalid attributes specified for the 'always_prevent_change' value: #{invalid}" unless invalid.empty?
 
-        invalid = @always_allow_modification - @attribute_names
+        invalid = @always_allow_modification - effective_class_attributes
         raise ChumpChange::ConfigurationError.new "Invalid attributes specified for the 'always_allow' value: #{invalid}" unless invalid.empty?
 
         @state_hash.keys.each do |k|
-          invalid = @state_hash[k] - @attribute_names
+          invalid = @state_hash[k] - effective_class_attributes
           raise ChumpChange::ConfigurationError.new "Invalid attributes specified in the 'allow_change_for' configuration for value '#{k}': #{invalid}" unless invalid.empty?
         end
 
@@ -200,11 +210,11 @@ module ChumpChange
           @@definition.instance_eval &block
           
           reflect_on_all_associations.map(&:name).each do |an|
-            define_method("allowable_change_fields_for_#{an}") do
+            superclass.send(:define_method, "allowable_change_fields_for_#{an}") do
               @@definition.fields_allowed_for_association_for_value(current_control_value, an.to_sym)
             end
 
-            define_method("allowable_operations_for_#{an}") do
+            superclass.send(:define_method, "allowable_operations_for_#{an}") do
               @@definition.operations_allowed_for_association_for_value(current_control_value, an.to_sym)
             end
           end

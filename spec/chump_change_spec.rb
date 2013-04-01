@@ -308,6 +308,7 @@ module ChumpChange
 
                 # while initiated - only allow creation/deletion of part -- but can only change quantity;  no model attributes may be changed
                 allow_change_for 'initiated', { :associations => { :part => { :attributes => [:quantity] } } }
+                prevent_change_for 'no_can_do'
 
                 # when completed - no longer allow creation or deletion of a part; only allow :four and :five to be modified on model
                 allow_change_for 'completed', {
@@ -328,6 +329,11 @@ module ChumpChange
             w = WidgetChangesPreventDisallowedHasOne.find w.id
 
             w.one -= 1
+            expect {
+              w.save
+            }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields.*one/) 
+
+            w.state = 'no_can_do'
             expect {
               w.save
             }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields.*one/) 

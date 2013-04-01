@@ -18,8 +18,8 @@ Gem::Specification.new do |s|
   s.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
   s.require_paths = ["lib"]
 
-  s.add_development_dependency("rspec",    "~> 2.12.0")
+  s.add_development_dependency("rspec",    "~> 2.13.0")
   s.add_development_dependency("activerecord",    "~> 3.2.9")
   s.add_development_dependency("sqlite3")
-  s.add_development_dependency("ruby-debug19")
+  s.add_development_dependency("debugger")
 end
