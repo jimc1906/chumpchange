@@ -706,6 +706,36 @@ module ChumpChange
             allowed = w.allowable_change_fields.sort
             expected.should == allowed
           end
+
+          it 'should include control column if explicitly indicated to do so' do
+            w = WidgetAllowConfiguredChanges.new
+            w.state = 'initiated'
+            w.save
+
+            expected = [ :one, :two, :three, :state].sort
+            allowed = w.allowable_change_fields(:include_control_column=>true).sort
+            expected.should == allowed
+
+            w.state = 'completed'
+            expected = [ :four, :five, :state].sort
+            allowed = w.allowable_change_fields(:include_control_column=>true).sort
+            expected.should == allowed
+          end
+
+          it 'should not include control column if indicated not to do so' do
+            w = WidgetAllowConfiguredChanges.new
+            w.state = 'initiated'
+            w.save
+
+            expected = [ :one, :two, :three ].sort
+            allowed = w.allowable_change_fields(:include_control_column=>false).sort
+            expected.should == allowed
+
+            w.state = 'completed'
+            expected = [ :four, :five ].sort
+            allowed = w.allowable_change_fields(:include_control_column=>false).sort
+            expected.should == allowed
+          end
         end
       end
     end

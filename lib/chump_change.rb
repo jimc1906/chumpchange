@@ -226,8 +226,10 @@ module ChumpChange
     end
     
     # May be overridden to allow for custom implementation
-    def allowable_change_fields
-      @@definition.fields_allowed_for_value(current_control_value)
+    def allowable_change_fields(options={:include_control_column => true})
+      attrs = @@definition.fields_allowed_for_value(current_control_value)
+      attrs.delete(@@definition.control_by) unless options[:include_control_column] == true
+      attrs
     end
 
     class_eval do
