@@ -97,9 +97,6 @@ module ChumpChange
       end
 
       def can_alter_association_collection?(action_sym, model, assoc_instance)
-#        debugger
-#        return true unless assoc_instance.changed?
-
         raise "Unknown action #{action_sym} while evaluating association behavior" unless [:create, :delete].include? action_sym
 
         assoc_def = find_matching_association_definition(assoc_instance)
@@ -237,7 +234,7 @@ module ChumpChange
       # create the guard_before_create and guard_before_delete methods
       [:create,:delete].each do |i| 
         define_method("guard_before_#{i}") do |assoc|
-          return if new_record?
+          return if new_record? || attribute_control_disabled?
           
           @@definition.confirm_specified_attributes
 
@@ -251,12 +248,54 @@ module ChumpChange
       # on the model.  We need to explicitly skip validation if new_record? returns true
       # for the life of this instance.  (Could be improved...)
       @chump_change_new_record = true if new_record?
-      return if new_record? || @chump_change_new_record
+      return if new_record? || @chump_change_new_record || attribute_control_disabled?
 
       @@definition.confirm_specified_attributes
 
       @@definition.can_modify_fields?(self, self.allowable_change_fields)
       @@definition.can_modify_association_attributes?(self)
+    end
+    
+    def attribute_control_disabled?
+      Thread.current[:attribute_control_disabled] == true
+    end
+
+    def attribute_control_enabled?
+      Thread.current[:attribute_control_disabled] == false
+    end
+
+    def disable_attribute_control
+      Thread.current[:attribute_control_disabled] = true
+    end
+
+    def enable_attribute_control
+      Thread.current[:attribute_control_disabled] = false
+    end
+
+    def without_attribute_control
+      previously_disabled = attribute_control_disabled?
+
+      begin
+        disable_attribute_control
+        result = yield if block_given?
+      ensure
+        enable_attribute_control unless previously_disabled
+      end
+
+      result
+    end
+
+    def with_attribute_control
+      previously_disabled = attribute_control_disabled?
+
+      begin
+        enable_attribute_control
+        result = yield if block_given?
+      ensure
+        disable_attribute_control if previously_disabled
+      end
+
+      result
     end
   end
 end
