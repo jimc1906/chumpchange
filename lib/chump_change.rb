@@ -40,6 +40,7 @@ module ChumpChange
       end
 
       def prevent_change_for(*control_values)
+        control_values.flatten!
         control_values.each do |cv|
           @state_hash[cv.to_sym] = []
 
@@ -155,11 +156,12 @@ module ChumpChange
         allowed
       end
 
-      def confirm_specified_attributes
+      def confirm_specified_attributes(model)
         return if @configuration_confirmed
 
         effective_class_attributes = @attribute_names + @association_names
 
+        #raise ChumpChange::ConfigurationError.new "Invalid control_by attribute specified: #{control_by}" unless model.respond_to? control_by.to_sym
         raise ChumpChange::ConfigurationError.new "Invalid control_by attribute specified: #{control_by}" unless @attribute_names.include? control_by.to_sym
 
         invalid = @always_prevent_modification - effective_class_attributes
@@ -238,7 +240,7 @@ module ChumpChange
         define_method("guard_before_#{i}") do |assoc|
           return if new_record? || attribute_control_disabled?
           
-          @@definition.confirm_specified_attributes
+          @@definition.confirm_specified_attributes(self)
 
           @@definition.can_alter_association_collection?(i, self, assoc)
         end
@@ -252,7 +254,7 @@ module ChumpChange
       @chump_change_new_record = true if new_record?
       return if new_record? || @chump_change_new_record || attribute_control_disabled?
 
-      @@definition.confirm_specified_attributes
+      @@definition.confirm_specified_attributes(self)
 
       @@definition.can_modify_fields?(self, self.allowable_change_fields)
       @@definition.can_modify_association_attributes?(self)

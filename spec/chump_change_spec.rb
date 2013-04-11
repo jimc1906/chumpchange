@@ -77,6 +77,45 @@ module ChumpChange
           w.one = 456
           w.save  # configuration confirmed in before_save trigger
         end
+        
+        it 'should load with configuration using control_by method' do
+          class WidgetSimpleBasedOnStateMethod < ActiveRecord::Base
+            include ::ChumpChange::AttributeGuardian
+            self.table_name = 'widgets'
+
+            has_one :part
+            has_many :things
+
+            attribute_control({:control_by => :state_value_method}) do
+              always_prevent_change :name
+              allow_change_for 'one', {
+                :attributes => [ :one ]
+              }
+              allow_change_for 'two', {
+                :attributes => [:two, :three],
+                :associations => { :part => {     # allow_* default to true
+                                      :allow_create => true,
+                                      :allow_delete => false
+                                   },
+                                   :things => {
+                                       :attributes => [ :city, :state ]
+                                   }
+                                 }
+              }
+            end
+
+            def state_value_method
+              state
+            end
+          end
+
+          w = WidgetSimpleBasedOnStateMethod.new
+          w.state = 'one'
+          w.one = 123
+          w.save
+          w.one = 456
+          w.save  # configuration confirmed in before_save trigger
+        end
          
         it 'should load with configuration that allows for association' do
           class WidgetPartAssociationConfig < ActiveRecord::Base
@@ -424,6 +463,7 @@ module ChumpChange
 
                 prevent_change_for 'unladen_swallow'
                 prevent_change_for 'african', 'european'
+                prevent_change_for ['arrays', 'are', 'okay']
 
                 # when completed - no longer allow creation or deletion of a part; only allow :four and :five to be modified on model
                 allow_change_for 'completed', {
@@ -547,7 +587,7 @@ module ChumpChange
             w.allowable_change_fields_for_parts.should == [:quantity]
 
             # prevented changes
-            ['unladen_swallow', 'african', 'european'].each do |st|
+            ['unladen_swallow', 'african', 'european', 'arrays', 'are', 'okay'].each do |st|
               w.state = st
               w.allowable_change_fields_for_parts.should == []
             end
