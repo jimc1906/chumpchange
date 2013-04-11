@@ -64,27 +64,21 @@ objects may be created or deleted from the collection.
         always_prevent_change :birth_date        
         allow_change_for 'initiated', { 
           :attributes => [:first_name, :last_name],
-          :associations => [ 
-                             {
-                               :addresses => { 
-                                 # Both :allow_create and :allow_delete default to true
-                                 :allow_create => true,
-                                 :allow_delete => false
-                               }
+          :associations => { :addresses => { 
+                               # Both :allow_create and :allow_delete default to true
+                               :allow_create => true,
+                               :allow_delete => false
                              }
-                           ]
+                           }
         }
         allow_change_for 'in_process', { 
           :attributes => [:birth_city],
-          :associations => [
-                             {
-                               :addresses => {
-                                 :allow_create => false,
-                                 :allow_delete => false,
-                                 :attributes => [ :street ]
-                               }
+          :associations => { :addresses => {
+                               :allow_create => false,
+                               :allow_delete => false,
+                               :attributes => [ :street ]
                              }
-                           ]
+                           }
         }
       end
 
