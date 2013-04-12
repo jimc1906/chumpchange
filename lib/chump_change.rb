@@ -14,14 +14,14 @@ module ChumpChange
 
         raise ChumpChange::ConfigurationError, "Missing control column value" if options[:control_by].nil?
 
+        @attribute_names = @model_class.attribute_names.collect{|v| v.to_sym }
+        @association_names = @model_class.reflect_on_all_associations.map(&:name)
+
         @control_column = options[:control_by]
         
         # Rails silently prevents modification to the :id attribute
         @always_prevent_modification = [ :created_at ] # leave :updated_at handling up to the client
-        @always_allow_modification = [ @control_column ]
-
-        @attribute_names = @model_class.attribute_names.collect{|v| v.to_sym }
-        @association_names = @model_class.reflect_on_all_associations.map(&:name)
+        @always_allow_modification = [ @control_column ] if @attribute_names.include?(@control_column)
 
         @state_hash = {}
         @associations_config = {}
@@ -161,8 +161,7 @@ module ChumpChange
 
         effective_class_attributes = @attribute_names + @association_names
 
-        #raise ChumpChange::ConfigurationError.new "Invalid control_by attribute specified: #{control_by}" unless model.respond_to? control_by.to_sym
-        raise ChumpChange::ConfigurationError.new "Invalid control_by attribute specified: #{control_by}" unless @attribute_names.include? control_by.to_sym
+        raise ChumpChange::ConfigurationError.new "Invalid control_by value specified: #{control_by}" unless model.respond_to? control_by.to_sym
 
         invalid = @always_prevent_modification - effective_class_attributes
         raise ChumpChange::ConfigurationError.new "Invalid attributes specified for the 'always_prevent_change' value: #{invalid}" unless invalid.empty?

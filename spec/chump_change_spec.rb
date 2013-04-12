@@ -270,7 +270,7 @@ module ChumpChange
             w = WidgetConsistencyControlBy.find w.id
             w.one = 456
             w.save
-          }.to raise_error(ChumpChange::ConfigurationError, /Invalid control_by attribute.*statex/)
+          }.to raise_error(ChumpChange::ConfigurationError, /Invalid control_by value.*statex/)
         end
       end
 
@@ -294,39 +294,57 @@ module ChumpChange
 
             belongs_to :widget
           end
+          
+#          class WidgetChangesPreventDisallowedWithMethod < ActiveRecord::Base
+#            include ::ChumpChange::AttributeGuardian
+#            self.table_name = 'widgets'
+#            has_one :part
+#
+#            attribute_control({:control_by => :control_method}) do
+#              always_prevent_change :name
+#              allow_change_for 'INITIATED', { :attributes => [:one, :two, :three] }
+#              allow_change_for 'COMPLETED', { :attributes => [:four, :five] }
+#            end
+#
+#            def control_method
+#              state.upcase
+#            end
+#          end
         end
 
         it 'should prevent changes to attributes explicitly prevented' do
-          w = WidgetChangesPreventDisallowed.new
-          w.state = 'initiated'
-          w.name = 'initial value'
-          w.save
-          w = WidgetChangesPreventDisallowed.find w.id
-
-          w.name = 'altered value'
-          expect {
+          [WidgetChangesPreventDisallowed, WidgetChangesPreventDisallowedWithMethod].each do |klass|
+            w = klass.new
+            w.state = 'initiated'
+            w.name = 'initial value'
             w.save
-          }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields.*name/) 
-          
-          # still no problems with a nil or unknown state (control value)
-          w = WidgetChangesPreventDisallowed.new
-          w.name = 'initial value'
-          w.save
-          w = WidgetChangesPreventDisallowed.find w.id
+            w = klass.find w.id
 
-          w.name = 'altered value'
-          expect {
+            w.name = 'altered value'
+            expect {
+              w.save
+            }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields.*name/) 
+
+            # still no problems with a nil or unknown state (control value)
+            w = klass.new
+            w.name = 'initial value'
             w.save
-          }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields.*name/) 
+            w = klass.find w.id
+
+            w.name = 'altered value'
+            expect {
+              w.save
+            }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields.*name/) 
+          end
         end
 
         it 'should prevent modifications to attributes not listed for a given state' do
-          w = WidgetChangesPreventDisallowed.new
+          w = klass.new
           w.state = 'initiated'
           w.one = 1
           w.four = 4
           w.save
-          w = WidgetChangesPreventDisallowed.find w.id
+          w = klass.find w.id
 
           w.four = 400 
           expect {
