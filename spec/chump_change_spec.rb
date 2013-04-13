@@ -295,27 +295,28 @@ module ChumpChange
             belongs_to :widget
           end
           
-#          class WidgetChangesPreventDisallowedWithMethod < ActiveRecord::Base
-#            include ::ChumpChange::AttributeGuardian
-#            self.table_name = 'widgets'
-#            has_one :part
-#
-#            attribute_control({:control_by => :control_method}) do
-#              always_prevent_change :name
-#              allow_change_for 'INITIATED', { :attributes => [:one, :two, :three] }
-#              allow_change_for 'COMPLETED', { :attributes => [:four, :five] }
-#            end
-#
-#            def control_method
-#              state.upcase
-#            end
-#          end
+          class WidgetChangesPreventDisallowedWithMethod < ActiveRecord::Base
+            include ::ChumpChange::AttributeGuardian
+            self.table_name = 'widgets'
+            has_one :part
+
+            attribute_control({:control_by => :control_method}) do
+              always_prevent_change :name
+              allow_change_for 'INITIATED', { :attributes => [:one, :two, :three] }
+              allow_change_for 'COMPLETED', { :attributes => [:four, :five] }
+            end
+
+            def control_method
+              state.upcase if state
+            end
+          end
         end
 
         it 'should prevent changes to attributes explicitly prevented' do
-          [WidgetChangesPreventDisallowed, WidgetChangesPreventDisallowedWithMethod].each do |klass|
+          #[WidgetChangesPreventDisallowed, WidgetChangesPreventDisallowedWithMethod].each_with_index do |klass, i|
+          [WidgetChangesPreventDisallowed, WidgetChangesPreventDisallowedWithMethod].each_with_index do |klass, i|
             w = klass.new
-            w.state = 'initiated'
+            w.state = ['initiated', 'INITIATED'][i]  # deal with the different implementation in the second pass
             w.name = 'initial value'
             w.save
             w = klass.find w.id
@@ -339,12 +340,12 @@ module ChumpChange
         end
 
         it 'should prevent modifications to attributes not listed for a given state' do
-          w = klass.new
+          w = WidgetChangesPreventDisallowed.new
           w.state = 'initiated'
           w.one = 1
           w.four = 4
           w.save
-          w = klass.find w.id
+          w = WidgetChangesPreventDisallowed.find w.id
 
           w.four = 400 
           expect {

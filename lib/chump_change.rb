@@ -21,7 +21,8 @@ module ChumpChange
         
         # Rails silently prevents modification to the :id attribute
         @always_prevent_modification = [ :created_at ] # leave :updated_at handling up to the client
-        @always_allow_modification = [ @control_column ] if @attribute_names.include?(@control_column)
+        @always_allow_modification = [ ] 
+        @always_allow_modification <<  @control_column if @attribute_names.include?(@control_column)
 
         @state_hash = {}
         @associations_config = {}
@@ -158,6 +159,7 @@ module ChumpChange
 
       def confirm_specified_attributes(model)
         return if @configuration_confirmed
+        debugger
 
         effective_class_attributes = @attribute_names + @association_names
 
@@ -204,32 +206,40 @@ module ChumpChange
         end
 
         def attribute_control(options, &block)
-          @@definition = Definition.new(self, options)
-          @@definition.instance_eval &block
+          @@definition = Hash.new if defined?(@@definition).nil?
+
+          attr_control_definition = Definition.new(self, options)
+          attr_control_definition.instance_eval &block
           
+          @@definition[self.name] = attr_control_definition
+
           reflect_on_all_associations.map(&:name).each do |an|
             superclass.send(:define_method, "allowable_change_fields_for_#{an}") do
-              @@definition.fields_allowed_for_association_for_value(current_control_value, an.to_sym)
+              definition.fields_allowed_for_association_for_value(current_control_value, an.to_sym)
             end
 
             superclass.send(:define_method, "allowable_operations_for_#{an}") do
-              @@definition.operations_allowed_for_association_for_value(current_control_value, an.to_sym)
+              definition.operations_allowed_for_association_for_value(current_control_value, an.to_sym)
             end
           end
         end
       end
     end
 
+    def definition
+      @@definition[self.class.name]
+    end
+
     def current_control_value
       # Gracefully handle a nil control value
-      ctlval = self.send(@@definition.control_by)
+      ctlval = self.send(definition.control_by)
       (ctlval ? ctlval.to_sym : ctlval)
     end
     
     # May be overridden to allow for custom implementation
     def allowable_change_fields(options={:include_control_column => true})
-      attrs = @@definition.fields_allowed_for_value(current_control_value)
-      attrs.delete(@@definition.control_by) unless options[:include_control_column] == true
+      attrs = definition.fields_allowed_for_value(current_control_value)
+      attrs.delete(definition.control_by) unless options[:include_control_column] == true
       attrs
     end
 
@@ -239,9 +249,9 @@ module ChumpChange
         define_method("guard_before_#{i}") do |assoc|
           return if new_record? || attribute_control_disabled?
           
-          @@definition.confirm_specified_attributes(self)
+          definition.confirm_specified_attributes(self)
 
-          @@definition.can_alter_association_collection?(i, self, assoc)
+          definition.can_alter_association_collection?(i, self, assoc)
         end
       end
     end
@@ -253,10 +263,10 @@ module ChumpChange
       @chump_change_new_record = true if new_record?
       return if new_record? || @chump_change_new_record || attribute_control_disabled?
 
-      @@definition.confirm_specified_attributes(self)
+      definition.confirm_specified_attributes(self)
 
-      @@definition.can_modify_fields?(self, self.allowable_change_fields)
-      @@definition.can_modify_association_attributes?(self)
+      definition.can_modify_fields?(self, self.allowable_change_fields)
+      definition.can_modify_association_attributes?(self)
     end
     
     def attribute_control_disabled?
