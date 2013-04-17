@@ -289,7 +289,7 @@ module ChumpChange
             end
           end
 
-          class WidgetPartAssociationPrevent < ActiveRecord::Base
+          class ::WidgetPartAssociationPrevent < ActiveRecord::Base
             self.table_name = 'parts'
 
             belongs_to :widget
@@ -382,7 +382,7 @@ module ChumpChange
             w.state = 'initiated'
             w.one = w.two = w.three = 123
 
-            w.part = WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            w.part = ::WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
             w.save.should be_true
             w = WidgetChangesPreventDisallowedHasOne.find w.id
 
@@ -405,7 +405,7 @@ module ChumpChange
             w.one = w.two = w.three = 123
             w.save.should be_true
 
-            w.part = WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            w.part = ::WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
             expect {
               w.save
             }.to raise_error(ChumpChange::Error, /Attempt has been made to create association record on :parts/) 
@@ -417,7 +417,7 @@ module ChumpChange
             w = WidgetChangesPreventDisallowedHasOne.new
             w.state = 'initiated'
             w.one = w.two = w.three = 123
-            w.part = WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            w.part = ::WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
             w.save.should be_true
             w = WidgetChangesPreventDisallowedHasOne.find w.id
 
@@ -431,7 +431,7 @@ module ChumpChange
             w = WidgetChangesPreventDisallowedHasOne.new
             w.state = 'initiated'
             w.one = w.two = w.three = 123
-            w.part = WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
+            w.part = ::WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
             w.save.should be_true
             w = WidgetChangesPreventDisallowedHasOne.find w.id
 
@@ -491,6 +491,27 @@ module ChumpChange
                 }
               end
             end
+            
+            class ::WidgetPartAssociationUncontrolled < ActiveRecord::Base
+              self.table_name = 'parts'
+
+              belongs_to :widget
+            end
+
+            class WidgetChangesUncontrolledHasMany < ActiveRecord::Base
+              include ::ChumpChange::AttributeGuardian
+
+              self.table_name = 'widgets'
+              has_many :parts, :class_name => 'WidgetPartAssociationUncontrolled', :as => :widget
+                
+              attribute_control(:control_by => :state) do
+                always_prevent_change :name
+
+                # no mention of association - should be wide open for change
+                allow_change_for 'initiated', { :attributes => [:one, :two, :three] }
+              end
+            end
+
           end
 
           it 'should prevent adding to one-to-many' do
@@ -610,10 +631,16 @@ module ChumpChange
               w.state = st
               w.allowable_change_fields_for_parts.should == []
             end
-
             
             w.state = 'completed'
-            w.allowable_change_fields_for_parts.should == []
+            w.allowable_change_fields_for_parts.should == ::WidgetPartAssociationPrevent.attribute_names
+          end
+
+          it 'should report appropriate fields allowed for uncontrolled association' do
+            w = WidgetChangesUncontrolledHasMany.new
+            w.state = 'initiated'
+
+            w.allowable_change_fields_for_parts.sort.should == ::WidgetPartAssociationUncontrolled.attribute_names.sort
           end
 
           it 'should report appropriate available actions available for associations' do

@@ -135,7 +135,9 @@ module ChumpChange
       def config_for_association(currvalue, assoc_name)
         config_for_control_value = @associations_config[currvalue] || {}
         config_for_assoc = config_for_control_value[assoc_name.to_sym] || {}
-        config_for_assoc = config_for_assoc.merge!({:attributes=>[], :allow_create=>true, :allow_delete=>true}) {|key,old,new| old }
+        
+        assoc_attributes = @model_class.reflect_on_association(assoc_name).class_name.constantize.attribute_names
+        config_for_assoc = config_for_assoc.merge!({:attributes=>assoc_attributes, :allow_create=>true, :allow_delete=>true}) {|key,old,new| old }
         config_for_assoc
       end
 
@@ -159,7 +161,6 @@ module ChumpChange
 
       def confirm_specified_attributes(model)
         return if @configuration_confirmed
-        debugger
 
         effective_class_attributes = @attribute_names + @association_names
 
