@@ -1,4 +1,5 @@
 require 'spec_helper'
+require 'status'
 
 module ChumpChange
   module AttributeGuardian
@@ -313,7 +314,6 @@ module ChumpChange
         end
 
         it 'should prevent changes to attributes explicitly prevented' do
-          #[WidgetChangesPreventDisallowed, WidgetChangesPreventDisallowedWithMethod].each_with_index do |klass, i|
           [WidgetChangesPreventDisallowed, WidgetChangesPreventDisallowedWithMethod].each_with_index do |klass, i|
             w = klass.new
             w.state = ['initiated', 'INITIATED'][i]  # deal with the different implementation in the second pass
@@ -351,6 +351,22 @@ module ChumpChange
           expect {
             w.save
           }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields.*four/) 
+        end
+
+        it 'should allow prevented changes within a without_attribute_control block' do
+          obj = Class.new { include ChumpChange::Status }.new
+
+          w = WidgetChangesPreventDisallowed.new
+          w.state = 'initiated'
+          w.one = 1
+          w.four = 4
+          w.save
+          w = WidgetChangesPreventDisallowed.find w.id
+
+          w.four = 400 
+          obj.without_attribute_control {
+            w.save
+          }
         end
 
         context 'has_one relationship' do
