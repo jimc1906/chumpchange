@@ -79,6 +79,61 @@ module ChumpChange
           w.save  # configuration confirmed in before_save trigger
         end
         
+        it 'should load with configuration using confirm_every_save_per_instance setting' do
+          class WidgetSimpleWithConfirmSetting < ActiveRecord::Base
+            include ::ChumpChange::AttributeGuardian
+            self.table_name = 'widgets'
+
+            attribute_control({:control_by => :state}) do
+              confirm_every_save_per_instance false
+              allow_change_for 'one', {
+                :attributes => [ :one ]
+              }
+            end
+          end
+
+          w = WidgetSimpleWithConfirmSetting.new
+          w.state = 'one'
+          w.one = 123
+          w.save
+
+          # Since we've set confirm_every_save_per_instance to false, no exception
+          # will get thrown at this point...still considered a new record
+          w.two = 456
+          w.save  # configuration confirmed in before_save trigger
+
+          # re-find and save -- should throw exception
+          w = WidgetSimpleWithConfirmSetting.find w.id
+          w.two = 789
+          expect {
+            w.save  # configuration confirmed in before_save trigger
+          }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields.*two/) 
+        end
+
+        it 'should load with configuration without confirm_every_save_per_instance' do
+          class WidgetSimpleWithoutConfirmSetting < ActiveRecord::Base
+            include ::ChumpChange::AttributeGuardian
+            self.table_name = 'widgets'
+
+            attribute_control({:control_by => :state}) do
+              # no confirm_every_save_per_instance setting -- defaults to true
+              allow_change_for 'one', {
+                :attributes => [ :one ]
+              }
+            end
+          end
+
+          w = WidgetSimpleWithoutConfirmSetting.new
+          w.state = 'one'
+          w.one = 123
+          w.save
+
+          expect {
+            w.two = 456
+            w.save  # configuration confirmed in before_save trigger
+          }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields.*two/) 
+        end
+
         it 'should load with configuration using control_by method' do
           class WidgetSimpleBasedOnStateMethod < ActiveRecord::Base
             include ::ChumpChange::AttributeGuardian
@@ -180,23 +235,23 @@ module ChumpChange
         end
 
         it 'should check that always_prevent_change attributes exist' do
-          expect {
-            class WidgetConsistencyAlwaysPrevent < ActiveRecord::Base
-              include ::ChumpChange::AttributeGuardian
-              self.table_name = 'widgets'
-            
-              attribute_control({:control_by => :state}) do
-                always_prevent_change :namex
-                allow_change_for 'one', { :attributes => [:one] }
-                allow_change_for 'two', { :attributes => [:two, :three] }
-              end
-            end
+          class WidgetConsistencyAlwaysPrevent < ActiveRecord::Base
+            include ::ChumpChange::AttributeGuardian
+            self.table_name = 'widgets'
 
-            w = WidgetConsistencyAlwaysPrevent.new
-            w.state = 'one'
-            w.one = 123
-            w.save
-            w = WidgetConsistencyAlwaysPrevent.find w.id
+            attribute_control({:control_by => :state}) do
+              always_prevent_change :namex
+              allow_change_for 'one', { :attributes => [:one] }
+              allow_change_for 'two', { :attributes => [:two, :three] }
+            end
+          end
+
+          w = WidgetConsistencyAlwaysPrevent.new
+          w.state = 'one'
+          w.one = 123
+          w.save
+
+          expect {
             w.one = 456
             w.save
           }.to raise_error(ChumpChange::ConfigurationError, /Invalid attributes.*always_prevent_change.*namex/)
@@ -218,7 +273,7 @@ module ChumpChange
             w.state = 'one'
             w.one = 123
             w.save
-            w = WidgetConsistencyAllowMod.find w.id
+
             w.one = 456
             w.save
           }.to raise_error(ChumpChange::ConfigurationError, /Invalid attributes.*allow_change_for.*onex/)
@@ -246,7 +301,7 @@ module ChumpChange
             w.state = 'one'
             w.one = 123
             w.save
-            w = WidgetConsistencyAssocConfig.find w.id
+
             w.one = 456
             w.save
           }.to raise_error(ChumpChange::ConfigurationError, /Invalid association names specified.*partx/)
@@ -268,7 +323,7 @@ module ChumpChange
             w.state = 'one'
             w.one = 123
             w.save
-            w = WidgetConsistencyControlBy.find w.id
+
             w.one = 456
             w.save
           }.to raise_error(ChumpChange::ConfigurationError, /Invalid control_by value.*statex/)
@@ -319,7 +374,6 @@ module ChumpChange
             w.state = ['initiated', 'INITIATED'][i]  # deal with the different implementation in the second pass
             w.name = 'initial value'
             w.save
-            w = klass.find w.id
 
             w.name = 'altered value'
             expect {
@@ -330,7 +384,6 @@ module ChumpChange
             w = klass.new
             w.name = 'initial value'
             w.save
-            w = klass.find w.id
 
             w.name = 'altered value'
             expect {
@@ -345,7 +398,6 @@ module ChumpChange
           w.one = 1
           w.four = 4
           w.save
-          w = WidgetChangesPreventDisallowed.find w.id
 
           w.four = 400 
           expect {
@@ -361,7 +413,6 @@ module ChumpChange
           w.one = 1
           w.four = 4
           w.save
-          w = WidgetChangesPreventDisallowed.find w.id
 
           w.four = 400 
           obj.without_attribute_control {
@@ -400,7 +451,6 @@ module ChumpChange
 
             w.part = ::WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
             w.save.should be_true
-            w = WidgetChangesPreventDisallowedHasOne.find w.id
 
             w.one -= 1
             expect {
@@ -435,7 +485,6 @@ module ChumpChange
             w.one = w.two = w.three = 123
             w.part = ::WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
             w.save.should be_true
-            w = WidgetChangesPreventDisallowedHasOne.find w.id
 
             expect {
               w.part = nil
@@ -449,7 +498,6 @@ module ChumpChange
             w.one = w.two = w.three = 123
             w.part = ::WidgetPartAssociationPrevent.new({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
             w.save.should be_true
-            w = WidgetChangesPreventDisallowedHasOne.find w.id
 
             expect {
               w.part.name = 'altered'
@@ -548,7 +596,6 @@ module ChumpChange
             w.parts.build({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
             w.parts.build({:name => 'another test', :manufacturer_state => 'VA', :quantity => 100})
             w.save.should be_true
-            w = WidgetChangesPreventDisallowedHasMany.find w.id
 
             p = w.parts.where(:name => 'another test')
             p.should_not be_empty
@@ -564,14 +611,12 @@ module ChumpChange
             w.parts.build({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
             w.parts.build({:name => 'quick test2', :manufacturer_state => 'NC', :quantity => 20})
             w.save.should be_true
-            w = WidgetChangesPreventDisallowedHasMany.find w.id
 
             expect {
               w.parts[1].name = 'altered'
               w.save
             }.to raise_error(ChumpChange::Error, /Attempt has been made to modify restricted fields on.*parts.*name/) 
 
-            w = WidgetChangesPreventDisallowedHasMany.find w.id
             w.state = 'completed'
             w.parts[1].quantity = 123
 

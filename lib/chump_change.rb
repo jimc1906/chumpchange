@@ -19,6 +19,8 @@ module ChumpChange
         @attribute_names = @model_class.attribute_names.collect{|v| v.to_sym }
         @association_names = @model_class.reflect_on_all_associations.map(&:name)
 
+        @confirmEverySavePerInstance = true
+
         @control_column = options[:control_by]
         
         # Rails silently prevents modification to the :id attribute
@@ -28,6 +30,14 @@ module ChumpChange
 
         @state_hash = {}
         @associations_config = {}
+      end
+
+      def confirmEverySavePerInstance?
+        @confirmEverySavePerInstance
+      end
+
+      def confirm_every_save_per_instance(val)
+        @confirmEverySavePerInstance = val
       end
 
       def control_by
@@ -219,11 +229,11 @@ module ChumpChange
           @@definition[self.name] = attr_control_definition
 
           reflect_on_all_associations.map(&:name).each do |an|
-            superclass.send(:define_method, "allowable_change_fields_for_#{an}") do
+            self.send(:define_method, "allowable_change_fields_for_#{an}") do
               definition.fields_allowed_for_association_for_value(current_control_value, an.to_sym)
             end
 
-            superclass.send(:define_method, "allowable_operations_for_#{an}") do
+            self.send(:define_method, "allowable_operations_for_#{an}") do
               definition.operations_allowed_for_association_for_value(current_control_value, an.to_sym)
             end
           end
@@ -264,8 +274,8 @@ module ChumpChange
     def review_model_value_changes
       # This instance variable is used in cases where an after_save event handler is
       # on the model.  We need to explicitly skip validation if new_record? returns true
-      # for the life of this instance.  (Could be improved...)
-      @chump_change_new_record = true if new_record?
+      # for the life of this instance.
+      @chump_change_new_record = true if new_record? and !definition.confirmEverySavePerInstance?
       return if new_record? || @chump_change_new_record || attribute_control_disabled?
 
       definition.confirm_specified_attributes(self)
