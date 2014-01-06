@@ -206,7 +206,7 @@ module ChumpChange
 
     def self.included(base)
       base.class_eval do
-        before_save :review_model_value_changes
+        before_save :review_model_value_changes, :prepend => true
       end
 
       base.instance_eval do
