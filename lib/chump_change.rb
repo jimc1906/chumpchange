@@ -57,9 +57,11 @@ module ChumpChange
         control_values.each do |cv|
           @state_hash[cv.to_sym] = []
 
+          assoc_config = {}
           @model_class.reflect_on_all_associations.each do |assoc|
-            @associations_config[cv.to_sym] = { assoc.name => { :attributes => [], :allow_create => false, :allow_delete => false } }
+            assoc_config[assoc.name] = { :attributes => [], :allow_create => false, :allow_delete => false } 
           end
+          @associations_config[cv.to_sym] = assoc_config
         end
       end
 
