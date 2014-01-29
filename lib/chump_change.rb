@@ -27,6 +27,7 @@ module ChumpChange
         @always_prevent_modification = [ :created_at ] # leave :updated_at handling up to the client
         @always_allow_modification = [ ] 
         @always_allow_modification <<  @control_column if @attribute_names.include?(@control_column)
+        @untracked_associations = [ ]
 
         @state_hash = {}
         @associations_config = {}
@@ -48,8 +49,9 @@ module ChumpChange
         @always_prevent_modification.concat fields.flatten
       end
 
-      def always_allow_change(*fields)
-          @always_allow_modification.concat fields.flatten
+      def always_allow_change(fields)
+          @always_allow_modification.concat fields[:attributes].flatten if fields.has_key?(:attributes)
+          @untracked_associations.concat fields[:associations].flatten if fields.has_key?(:associations)
       end
 
       def prevent_change_for(*control_values)
@@ -89,7 +91,11 @@ module ChumpChange
       def can_modify_association_attributes?(model)
         # find the dsl-configuration for the current model control value
         config_for_control_value = @associations_config[model.current_control_value.to_sym] || {}
-
+        
+        # don't check the associations that we have white-listed
+        @untracked_associations.each do |assoc|
+          config_for_control_value.delete(assoc)
+        end
         # iterate over each of the defined association names and check for disallowed changes
         config_for_control_value.each do |key, config|
           assoc_instance = model.send(key)
