@@ -67,7 +67,7 @@ module ChumpChange
         end
       end
 
-      def allow_change_for(control_value, options)
+      def allow_change_for(control_value, options = {})
         # Allow for either a String or Array...
         control_values = [control_value].flatten
 
