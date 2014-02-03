@@ -200,7 +200,7 @@ module ChumpChange
         #TODO: check attributes specified on association configs
 
         all_defined_associations = @associations_config.values.inject([]) {|result,v| result << v.keys}
-        all_defined_associations.flatten!.uniq!
+        all_defined_associations.try(:flatten!).try(:uniq!)
 
         invalid = all_defined_associations - @association_names 
         raise ChumpChange::ConfigurationError.new "Invalid association names specified: #{invalid}" unless invalid.empty?

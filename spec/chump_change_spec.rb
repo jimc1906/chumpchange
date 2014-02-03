@@ -212,6 +212,31 @@ module ChumpChange
           w.save
         end
 
+        it 'should load with configuration that always allows for a association' do
+          class WidgetPartAssociationConfig < ActiveRecord::Base
+            self.table_name = 'parts'
+
+            belongs_to :widget
+          end
+
+          class Widget < ActiveRecord::Base
+            include ::ChumpChange::AttributeGuardian
+            self.table_name = 'widgets'
+
+            has_one :part, :class_name => 'WidgetPartAssociationConfig'
+
+            attribute_control({:control_by => :state}) do
+              always_allow_change :associations => [:part] 
+            end
+          end
+          w = Widget.new
+          ['one', 'two', 'three'].each do |test_state| 
+            w.state = test_state
+            w.build_part({:name => "state: #{test_state}"})
+            w.save
+          end
+        end
+
         it 'should raise configuration error if incomplete' do
           expect { 
             class WidgetIncompleteConfig < ActiveRecord::Base
