@@ -226,6 +226,9 @@ module ChumpChange
             has_one :part, :class_name => 'WidgetPartAssociationConfig'
 
             attribute_control({:control_by => :state}) do
+              allow_change_for 'one'
+              allow_change_for 'two'
+              allow_change_for 'three'
               always_allow_change :associations => [:part] 
             end
           end
