@@ -183,6 +183,8 @@ module ChumpChange
         return if @configuration_confirmed
 
         effective_class_attributes = @attribute_names + @association_names
+        
+        raise ChumpChange::ConfigurationError.new "Invalid Configuration: No States defined" if @associations@config.empty?
 
         raise ChumpChange::ConfigurationError.new "Invalid control_by value specified: #{control_by}" unless model.respond_to? control_by.to_sym
 
