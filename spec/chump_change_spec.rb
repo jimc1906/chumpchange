@@ -240,6 +240,25 @@ module ChumpChange
           end
         end
 
+        it 'should raise configuration error if no states defined' do
+          expect {
+            class Widget < ActiveRecord::Base
+              include ::ChumpChange::AttributeGuardian
+              self.table_name = 'widgets'
+
+              attribute_control({:control_by => :state}) do
+                always_allow_change :associations => [:part] 
+              end 
+            end
+          w = Widget.new
+          w.state = 'one'
+          w.one = 123
+          w.save
+          w.one = 456
+          w.save
+          }.to raise_error(ChumpChange::ConfigurationError, /No States defined/)
+        end
+
         it 'should raise configuration error if incomplete' do
           expect { 
             class WidgetIncompleteConfig < ActiveRecord::Base
