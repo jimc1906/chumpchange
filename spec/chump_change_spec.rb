@@ -212,6 +212,53 @@ module ChumpChange
           w.save
         end
 
+        it 'should load with configuration that always allows for a association' do
+          class WidgetPartAssociationConfig < ActiveRecord::Base
+            self.table_name = 'parts'
+
+            belongs_to :widget
+          end
+
+          class Widget < ActiveRecord::Base
+            include ::ChumpChange::AttributeGuardian
+            self.table_name = 'widgets'
+
+            has_one :part, :class_name => 'WidgetPartAssociationConfig'
+
+            attribute_control({:control_by => :state}) do
+              allow_change_for 'one'
+              allow_change_for 'two'
+              allow_change_for 'three'
+              always_allow_change :associations => [:part] 
+            end
+          end
+          w = Widget.new
+          ['one', 'two', 'three'].each do |test_state| 
+            w.state = test_state
+            w.build_part({:name => "state: #{test_state}"})
+            w.save
+          end
+        end
+
+        it 'should raise configuration error if no states defined' do
+          expect {
+            class Widget < ActiveRecord::Base
+              include ::ChumpChange::AttributeGuardian
+              self.table_name = 'widgets'
+
+              attribute_control({:control_by => :state}) do
+                always_allow_change :associations => [:part] 
+              end 
+            end
+          w = Widget.new
+          w.state = 'one'
+          w.one = 123
+          w.save
+          w.one = 456
+          w.save
+          }.to raise_error(ChumpChange::ConfigurationError, /No States defined/)
+        end
+
         it 'should raise configuration error if incomplete' do
           expect { 
             class WidgetIncompleteConfig < ActiveRecord::Base
