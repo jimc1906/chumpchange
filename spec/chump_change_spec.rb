@@ -633,7 +633,7 @@ module ChumpChange
 
             expect {
               w.parts.build({:name => 'quick test', :manufacturer_state => 'VA', :quantity => 100})
-            }.to raise_error(ChumpChange::Error, /Attempt has been made to create association record on :parts/) 
+            }.to raise_error(ChumpChange::Error, /Attempt has been made to create association record on .*:parts/) 
           end
 
           it 'should prevent deleting from one-to-many' do
@@ -648,7 +648,7 @@ module ChumpChange
             p.should_not be_empty
             expect {
               w.parts.delete(p)
-            }.to raise_error(ChumpChange::Error, /Attempt has been made to delete association record on :parts/) 
+            }.to raise_error(ChumpChange::Error, /Attempt has been made to delete association record on .*:parts/) 
           end
 
           it 'should prevent changes for one-to-many associated record attributes' do

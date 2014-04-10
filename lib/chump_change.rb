@@ -80,10 +80,10 @@ module ChumpChange
       def can_modify_fields?(model, allowed_changes)
         changed = model.changed.collect!{|v| v.to_sym}
         prevented_changes = @always_prevent_modification & (changed - @always_allow_modification)
-        raise ChumpChange::Error.new "Attempt has been made to modify restricted fields: #{prevented_changes}" unless prevented_changes.empty?
+        raise ChumpChange::Error.new "Attempt has been made to modify restricted fields on #{class_name(model)}: #{prevented_changes}" unless prevented_changes.empty?
 
         prevented_changes = changed - (allowed_changes + @always_allow_modification)
-        raise ChumpChange::Error.new "Attempt has been made to modify restricted fields: #{prevented_changes}" unless prevented_changes.empty?
+        raise ChumpChange::Error.new "Attempt has been made to modify restricted fields on #{class_name(model)}: #{prevented_changes}" unless prevented_changes.empty?
 
         true
       end
@@ -112,10 +112,10 @@ module ChumpChange
       end
 
       def check_for_disallowed_changes(obj, config, assoc_name)
-        return if obj.new_record?  # additions of new records are handled through the before_add hook
+        return if obj.nil? or (obj and obj.new_record?)  # additions of new records are handled through the before_add hook
 
         prevented_changes = obj.changed.collect!{|v| v.to_sym} - (config[:attributes] || [])
-        raise ChumpChange::Error.new "Attempt has been made to modify restricted fields on #{assoc_name}: #{prevented_changes}" unless prevented_changes.empty?
+        raise ChumpChange::Error.new "Attempt has been made to modify restricted fields on #{class_name(obj)} #{assoc_name}: #{prevented_changes}" unless prevented_changes.empty?
       end
 
       def can_alter_association_collection?(action_sym, model, assoc_instance)
@@ -126,7 +126,7 @@ module ChumpChange
         config_for_assoc = config_for_association(model.send(control_by).to_sym, assoc_def.name)
         can_perform_action = config_for_assoc["allow_#{action_sym}".to_sym]
         can_perform_action = true if can_perform_action.nil?
-        raise ChumpChange::Error.new "Attempt has been made to #{action_sym} association record on :#{assoc_def.name}" unless can_perform_action
+        raise ChumpChange::Error.new "Attempt has been made to #{action_sym} association record on #{class_name(model)}:#{assoc_def.name}" unless can_perform_action
 
         true
       end
@@ -212,6 +212,13 @@ module ChumpChange
 
         @configuration_confirmed = true
       end
+
+      private
+      
+      def class_name(obj)
+        obj.class.name
+      end
+
     end
 
     def self.included(base)
